@@ -11,16 +11,25 @@ using System.Diagnostics;
 using System.Media;
 
 namespace Laser_Turret_Aim
-{
+{    public static class MathExtensions
+    {
+        public static long Round(this long i, long nearest)
+        {
+            if (nearest <= 0 || nearest % 10 != 0)
+                throw new ArgumentOutOfRangeException("nearest", "Must round to a positive multiple of 10");
+
+            return (i + 5 * nearest / 10) / nearest * nearest;
+        }
+    }
+
     public partial class Form1 : Form
     {
         static System.Windows.Forms.Timer timer1 = new System.Windows.Forms.Timer();
-        public Stopwatch watch { get; private set; }
-        public Stopwatch watch2 { get; private set; }
-        public Stopwatch portalWatch { get; private set; }
-        public Stopwatch waitWatch { get; private set; }
+        public Stopwatch servoWatch { get; private set; }             
+        public Stopwatch idleVoiceLinesWatch { get; private set; }
 
-        int sound = 0;        
+        int soundIndex = 0;
+        bool loopdone = true;
 
         System.Media.SoundPlayer hello = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\hellofriend.wav");
         System.Media.SoundPlayer iSeeYou = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\iseeyou.wav");
@@ -29,31 +38,29 @@ namespace Laser_Turret_Aim
         System.Media.SoundPlayer deploy = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_deploy.wav");
         System.Media.SoundPlayer disabled = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_turret_disabled_4.wav");
         System.Media.SoundPlayer retire = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_turret_retire_1.wav");
-
-
+        System.Media.SoundPlayer retract = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_retract.wav");
         public Form1()
         {
             InitializeComponent();
-            InitializeTimer();
-            waitWatch = Stopwatch.StartNew();
+            InitializeTimer();            
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            watch = Stopwatch.StartNew();
-            watch2 = Stopwatch.StartNew();
-            portalWatch = Stopwatch.StartNew();
-            
+            servoWatch = Stopwatch.StartNew();            
+            idleVoiceLinesWatch = Stopwatch.StartNew();           
 
             port.Open();
             port.Write("X90Y90");
         }     
 
-        private void Form1_MouseMove(object sender, MouseEventArgs e)
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+        private async void Form1_MouseMove(object sender, MouseEventArgs e)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
         {
-            writeToPort(new Point(e.X, e.Y));            
+            writeToPort(new Point(e.X, e.Y));
 
-            waitWatch = Stopwatch.StartNew();
+            idleVoiceLinesWatch = Stopwatch.StartNew();
         }
         private void InitializeTimer()
         {
@@ -62,47 +69,52 @@ namespace Laser_Turret_Aim
             timer1.Enabled = true;            
         }
 
-        private void timer1_Tick(object sender, EventArgs e)
+        private async Task idle()
         {
-            if(waitWatch.ElapsedMilliseconds > 5000)
-            {              
-                int anglex = 0;
-                int angley = 90;
-                string angle;
+            int anglex = 0;
+            int angley = 90;
+            string angle;
 
-                for(int i = 0; i < 180; i++)
+            List<SoundPlayer> idleSounds = new List<SoundPlayer>()
+            {
+                stillThere,
+                iSeeYou,
+                comeOver
+            };
+
+            loopdone = false;
+
+            idleSounds.ElementAt(soundIndex).Play();
+
+            if(soundIndex < 2)
+            {
+                soundIndex++;
+            }
+            else
+            {
+                soundIndex = 0;
+            }
+            
+            for (int i = 0; i < 180; i++)
+            {
+                if(idleVoiceLinesWatch.ElapsedMilliseconds > 5000)
                 {
+                    
                     angle = String.Format("X{0}Y{1}", anglex + i, angley);
-
                     port.Write(angle);
-                    System.Threading.Thread.Sleep(35);                
-                }
-
-                System.Threading.Thread.Sleep(100);
-
+                    await Task.Delay(35);
+                }                
             }
+            loopdone = true;
+            await Task.Delay(100);
+        }
 
-            if (waitWatch.ElapsedMilliseconds > 25000)
+        private async void timer1_Tick(object sender, EventArgs e)
+        {
+            if (idleVoiceLinesWatch.ElapsedMilliseconds > 15000 && loopdone == true)
             {
-                stillThere.Play();
-                waitWatch = Stopwatch.StartNew();
-            }
-
-            if (portalWatch.ElapsedMilliseconds > 10000 && sound == 0)
-            {
-                portalWatch = Stopwatch.StartNew();
-
-                iSeeYou.Play();
-                sound += 1;
-            }
-
-            else if (portalWatch.ElapsedMilliseconds > 10000 && sound == 1)
-            {
-                portalWatch = Stopwatch.StartNew();
-
-                comeOver.Play();
-                sound -= 1;
-            }
+                await idle();
+            }            
         }
 
         public void writeToPort(Point coordinates)
@@ -110,16 +122,17 @@ namespace Laser_Turret_Aim
             int xcoord = (180 - coordinates.X / (Size.Width / 180));
             int ycoord = (180 - coordinates.Y / (Size.Height / 180));
 
-            if (watch.ElapsedMilliseconds > 15)
+            if (servoWatch.ElapsedMilliseconds > 15)
             {
-                watch = Stopwatch.StartNew();
+                servoWatch = Stopwatch.StartNew();
 
                 port.Write(String.Format("X{0}Y{1}", xcoord, ycoord));
             }                        
         }
 
         private void Form1_FormClosed(object sender, FormClosedEventArgs e)
-        {            
+        {
+            retract.PlaySync();
             disabled.PlaySync();
             port.Write("X90Y90");
             retire.PlaySync();

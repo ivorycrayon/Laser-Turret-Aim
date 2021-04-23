@@ -19,6 +19,7 @@ namespace Laser_Turret_Aim
         public Stopwatch idleVoiceLinesWatch { get; private set; }
 
         int soundIndex = 0;
+        int fireIndex = 0;
         bool loopdone = true;
 
         System.Media.SoundPlayer hello = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\hellofriend.wav");
@@ -29,8 +30,13 @@ namespace Laser_Turret_Aim
         System.Media.SoundPlayer disabled = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_turret_disabled_4.wav");
         System.Media.SoundPlayer retire = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_turret_retire_1.wav");
         System.Media.SoundPlayer retract = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_retract.wav");
+        System.Media.SoundPlayer anyoneThere = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_turret_autosearch_5.wav");
+        System.Media.SoundPlayer fire1 = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_turret_fire_4x_01.wav");
+        System.Media.SoundPlayer fire2 = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_turret_fire_4x_02.wav");
+        System.Media.SoundPlayer fire3 = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_turret_fire_4x_03.wav");
 
         List<SoundPlayer> idleSounds = new List<SoundPlayer>();
+        List<SoundPlayer> fireSounds = new List<SoundPlayer>();        
 
         List<int> anglesY = new List<int>();
         int angleX;
@@ -51,9 +57,9 @@ namespace Laser_Turret_Aim
 
         private void Form1_Shown(object sender, EventArgs e)
         {
-            deploy.PlaySync();
-            port.Write("X90Y80");
+            deploy.PlaySync();            
             hello.Play();
+            port.Write("X90Y80");
         }
 
         private void Form1_FormClosed(object sender, FormClosedEventArgs e)
@@ -62,7 +68,29 @@ namespace Laser_Turret_Aim
             disabled.PlaySync();
             port.Write("X90Y180");
             retire.PlaySync();
-        }        
+        }
+        
+        private void Form1_MouseLeave(object sender, EventArgs e)
+        {
+            //port.Write("X60Y120");
+        }
+
+        private void Form1_MouseClick(object sender, MouseEventArgs e)
+        {
+            fireSounds = new List<SoundPlayer>()
+            {
+                fire1,
+                fire2,
+                fire3
+            };
+            
+            fireSounds[fireIndex].Play();
+
+            if (fireIndex < 2)
+                fireIndex++;
+            else
+                fireIndex = 0;            
+        }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
         private async void Form1_MouseMove(object sender, MouseEventArgs e)
@@ -95,7 +123,7 @@ namespace Laser_Turret_Aim
 
         private async void timer1_Tick(object sender, EventArgs e)
         {
-            if (idleVoiceLinesWatch.ElapsedMilliseconds > 5000 && loopdone == true)
+            if (idleVoiceLinesWatch.ElapsedMilliseconds > 10000 && loopdone == true)
             {
                 await idle();
             }
@@ -110,6 +138,7 @@ namespace Laser_Turret_Aim
             {
                 stillThere,
                 iSeeYou,
+                anyoneThere,
                 comeOver
             };
 
@@ -122,7 +151,7 @@ namespace Laser_Turret_Aim
 
             idleSounds.ElementAt(soundIndex).Play();
 
-            if(soundIndex < 2)
+            if(soundIndex < 3)
             {
                 soundIndex++;
             }
@@ -146,15 +175,9 @@ namespace Laser_Turret_Aim
 
             loopdone = true;
             //await Task.Delay(100); //50
-        }
-
-        
-
-        
-
-           
+        }        
     }
-    
+
     public static class MathExtensions
     {
         public static long Round(this long i, long nearest)

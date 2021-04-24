@@ -55,8 +55,7 @@ namespace Laser_Turret_Aim
             this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.Form1_FormClosed);
             this.Load += new System.EventHandler(this.Form1_Load);
             this.Shown += new System.EventHandler(this.Form1_Shown);
-            this.MouseClick += new System.Windows.Forms.MouseEventHandler(this.Form1_MouseClick);
-            this.MouseLeave += new System.EventHandler(this.Form1_MouseLeave);
+            this.MouseClick += new System.Windows.Forms.MouseEventHandler(this.Form1_MouseClick);            
             this.MouseMove += new System.Windows.Forms.MouseEventHandler(this.Form1_MouseMove);
             this.ResumeLayout(false);
 

@@ -11,16 +11,17 @@ using System.Diagnostics;
 using System.Media;
 
 namespace Laser_Turret_Aim
-{    
+{
     public partial class Form1 : Form
     {
         static System.Windows.Forms.Timer timer1 = new System.Windows.Forms.Timer();
-        public Stopwatch servoWatch { get; private set; }             
+        public Stopwatch servoWatch { get; private set; }
         public Stopwatch idleVoiceLinesWatch { get; private set; }
 
         int soundIndex = 0;
         int fireIndex = 0;
         bool loopdone = true;
+        bool laserSwitch = true;
 
         System.Media.SoundPlayer hello = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\hellofriend.wav");
         System.Media.SoundPlayer iSeeYou = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\iseeyou.wav");
@@ -36,11 +37,11 @@ namespace Laser_Turret_Aim
         System.Media.SoundPlayer fire3 = new System.Media.SoundPlayer(@"C:\Users\Ivory.DESKTOP-J6TK9H0\Google Drive\programming\C\Arduino\Laser Turret Aim\portal\Turret_turret_fire_4x_03.wav");
 
         List<SoundPlayer> idleSounds = new List<SoundPlayer>();
-        List<SoundPlayer> fireSounds = new List<SoundPlayer>();        
+        List<SoundPlayer> fireSounds = new List<SoundPlayer>();
 
         List<int> anglesY = new List<int>();
         int angleX;
-            
+
         public Form1()
         {
             InitializeComponent();
@@ -49,33 +50,31 @@ namespace Laser_Turret_Aim
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            servoWatch = Stopwatch.StartNew();            
-            idleVoiceLinesWatch = Stopwatch.StartNew();           
+            servoWatch = Stopwatch.StartNew();
+            idleVoiceLinesWatch = Stopwatch.StartNew();
 
-            port.Open();            
+            port.Open();
         }
 
-        private void Form1_Shown(object sender, EventArgs e)
+        private async void Form1_Shown(object sender, EventArgs e)
         {
-            deploy.PlaySync();            
+            deploy.PlaySync();
+            port.Write("ON");
             hello.Play();
-            port.Write("X90Y80");
+            await Task.Delay(30);
+            port.Write("X90Y90");
         }
 
         private void Form1_FormClosed(object sender, FormClosedEventArgs e)
         {
             retract.PlaySync();
             disabled.PlaySync();
-            port.Write("X90Y180");
+            port.Write("OFF");
             retire.PlaySync();
-        }
-        
-        private void Form1_MouseLeave(object sender, EventArgs e)
-        {
-            //port.Write("X60Y120");
+            port.Write("X90Y180");
         }
 
-        private void Form1_MouseClick(object sender, MouseEventArgs e)
+        private async void Form1_MouseClick(object sender, MouseEventArgs e)
         {
             fireSounds = new List<SoundPlayer>()
             {
@@ -83,13 +82,42 @@ namespace Laser_Turret_Aim
                 fire2,
                 fire3
             };
-            
-            fireSounds[fireIndex].Play();
 
-            if (fireIndex < 2)
-                fireIndex++;
-            else
-                fireIndex = 0;            
+            switch (e.Button)
+            {
+                case MouseButtons.Left:
+                    fireSounds[fireIndex].Play();
+
+                    if (fireIndex < 2)
+                        fireIndex++;
+                    else
+                        fireIndex = 0;
+
+                    break;
+
+                case MouseButtons.Right:
+
+                    if (laserSwitch)
+                    {
+                        await Task.Delay(25);
+                        retract.Play();
+                        await Task.Delay(25);
+                        port.Write("OFF");
+
+                        laserSwitch = false;
+                    }
+                    else
+                    {
+                        await Task.Delay(25);
+                        deploy.Play();
+                        await Task.Delay(25);
+                        port.Write("ON");
+
+                        laserSwitch = true;
+                    }
+
+                    break;
+            }
         }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
@@ -134,6 +162,8 @@ namespace Laser_Turret_Aim
             angleX = 0;
             string angle;
 
+            loopdone = false;
+
             idleSounds = new List<SoundPlayer>()
             {
                 stillThere,
@@ -144,48 +174,37 @@ namespace Laser_Turret_Aim
 
             anglesY = new List<int>()
             {
-                100, 90, 80, 70, 60
+                110, 100, 90, 80, 70
             };
 
-            loopdone = false;
-
+            port.Write("ON");
+            laserSwitch = true;
             idleSounds.ElementAt(soundIndex).Play();
 
-            if(soundIndex < 3)
+            if (soundIndex < 3)
             {
                 soundIndex++;
             }
             else
             {
                 soundIndex = 0;
-            }            
-            
-            foreach(int angleY in anglesY)
+            }
+
+            foreach (int angleY in anglesY)
             {
                 for (int i = 0; i < 180; i++) //0-180
                 {
                     if (idleVoiceLinesWatch.ElapsedMilliseconds > 5000)
                     {
+                        await Task.Delay(30); //35
                         angle = String.Format("X{0}Y{1}", angleX + i, angleY);
                         port.Write(angle);
-                        await Task.Delay(30); //35
+
                     }
-                }                             
+                }
             }
 
             loopdone = true;
-            //await Task.Delay(100); //50
-        }        
-    }
-
-    public static class MathExtensions
-    {
-        public static long Round(this long i, long nearest)
-        {
-            if (nearest <= 0 || nearest % 10 != 0)
-                throw new ArgumentOutOfRangeException("nearest", "Must round to a positive multiple of 10");
-
-            return (i + 5 * nearest / 10) / nearest * nearest;
         }
     }
 }

@@ -20,8 +20,7 @@ namespace Laser_Turret_Aim
         public Stopwatch servoWatch { get; private set; }
         public Stopwatch idleVoiceLinesWatch { get; private set; }
 
-        SpeechRecognitionEngine _recognizer = new SpeechRecognitionEngine();
-        SpeechSynthesizer voice = new SpeechSynthesizer();       
+        SpeechSynthesizer voice = new SpeechSynthesizer();            
 
         int soundIndex = 0;
         int fireIndex = 0;
@@ -55,33 +54,74 @@ namespace Laser_Turret_Aim
             InitializeTimer();
         }
 
-        private void Form1_Load(object sender, EventArgs e)
+        private async void loadEngine()
         {
-            servoWatch = Stopwatch.StartNew();
-            idleVoiceLinesWatch = Stopwatch.StartNew();
+            List<string> commands = new List<string>
+                { "System on", "System off", "Move up", "Move down", "Move left", "Move right", "Sensitivity up", "Sensisitvity down", "Go loco" };
 
-            port.Open();
+            for (int i = 1; i < 180; i++)
+            {
+                commands.Add("Sensitivity " + i.ToString());
+            }            
+
+            Console.WriteLine("\nCommands are:\n");
+            foreach (string command in commands)
+            {
+                Console.WriteLine(command);
+            }
+
+            SpeechRecognitionEngine _recognizer =
+            new SpeechRecognitionEngine(
+                new System.Globalization.CultureInfo("en-US"));
+
+            DictationGrammar defaultDictationGrammar = new DictationGrammar("grammar:dictation#pronunciation");
 
             _recognizer.SetInputToDefaultAudioDevice();
 
-            _recognizer.LoadGrammarAsync(
-                new Grammar(
-                    new GrammarBuilder(
-                        new Choices(new string[]{
-                            "System on", "System off", "Move up", "Move down", "Move left", "Move right", "Sensitivity up", "Sensisitvity down", "Go loco" }))));
+            Grammar commandGrammar =
+            new Grammar(
+                new GrammarBuilder(
+                    new Choices(commands.ToArray())));
+
+            commandGrammar.Name = "command grammar";
+            _recognizer.LoadGrammarAsync(commandGrammar);
+            defaultDictationGrammar.Name = "default dictation grammar";
+            _recognizer.LoadGrammarAsync(defaultDictationGrammar);
 
             _recognizer.SpeechRecognized += new EventHandler<SpeechRecognizedEventArgs>(Default_SpeechRecognized);
             _recognizer.RecognizeAsync(RecognizeMode.Multiple);
 
             voice.SelectVoice("Microsoft Hazel Desktop");
         }
-        private async void Default_SpeechRecognized(object sender, SpeechRecognizedEventArgs e)
-        {           
-            
 
-            if (e.Result.Confidence > .80)
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            servoWatch = Stopwatch.StartNew();
+            idleVoiceLinesWatch = Stopwatch.StartNew();                   
+
+            port.Open();
+            loadEngine();            
+        }
+        private async void Default_SpeechRecognized(object sender, SpeechRecognizedEventArgs e)
+        {
+            if (e.Result == null) return;
+
+            Console.WriteLine("\nRecognition result summary:");
+            Console.WriteLine(
+              "  Recognized phrase: {0}\n" +
+              "  Confidence score {1}\n" +
+              "  Grammar used: {2}\n",
+              e.Result.Text, e.Result.Confidence, e.Result.Grammar.Name);
+
+            if (e.Result.Confidence > .5 && e.Result.Grammar.Name != "default dictation grammar")
             {
                 string speech = e.Result.Text;
+
+                string firstWord = speech.Split(' ').First();
+                Console.WriteLine($"First word is {firstWord}");
+
+                string secondWord = speech.Split(' ').Skip(1).FirstOrDefault();
+                Console.WriteLine($"Second word is {secondWord}");
 
                 int xcoord = parseDataX(lastPos);
                 int ycoord = parseDataY(lastPos);
@@ -93,55 +133,66 @@ namespace Laser_Turret_Aim
 
                 idleVoiceLinesWatch = Stopwatch.StartNew();
 
-                switch (speech)
+                if(firstWord == "Sensitivity" && speech.Split(' ').Length == 2)
                 {
-                    case "System on":
-                        On_Mode();
-                        break;
-
-                    case "System off":
-                        Off_Mode();
-                        break;
-
-                    case "Move up":
-                        lastPos = String.Format("X{0}Y{1}", xcoord, ycoord + sensitivity);
-                        voice.SpeakAsync("Yes master");
-                        port.Write(lastPos);
-                        break;
-
-                    case "Move down":
-                        lastPos = String.Format("X{0}Y{1}", xcoord, ycoord - sensitivity);
-                        voice.SpeakAsync("Yes master");
-                        port.Write(lastPos);
-                        break;
-
-                    case "Move left":
-                        lastPos = String.Format("X{0}Y{1}", xcoord + sensitivity, ycoord);
-                        voice.SpeakAsync("Yes master");
-                        port.Write(lastPos);
-                        break;
-
-                    case "Move right":
-                        lastPos = String.Format("X{0}Y{1}", xcoord - sensitivity, ycoord);
-                        voice.SpeakAsync("Yes master");
-                        port.Write(lastPos);
-                        break;
-
-                    case "Sensitivity up":
+                    if (secondWord == "up")
+                    {
                         sensitivity += 2;
                         voice.SpeakAsync($"Sensitivity is {sensitivity}");
-                        break;
-
-                    case "Sensitivity down":
+                    }
+                    else if (secondWord == "down")
+                    {
                         if (sensitivity > 2) sensitivity -= 2;
                         voice.SpeakAsync($"Sensitivity is {sensitivity}");
-                        break;
+                    }
+                    else if(int.Parse(secondWord) > 0 && int.Parse(secondWord) < 181)
+                    {
+                        sensitivity = int.Parse(secondWord);
+                        voice.SpeakAsync($"Sensitivity is {sensitivity}");
+                    }
+                }            
+                
+                else
+                {
+                    switch (speech)
+                    {
+                        case "System on":
+                            On_Mode();
+                            break;
 
-                    case "Go loco":
-                        Go_Loco();
+                        case "System off":
+                            Off_Mode();
+                            break;
 
-                        break;
-                }
+                        case "Move up":
+                            lastPos = String.Format("X{0}Y{1}", xcoord, ycoord + sensitivity);
+                            voice.SpeakAsync("Yes master");
+                            port.Write(lastPos);
+                            break;
+
+                        case "Move down":
+                            lastPos = String.Format("X{0}Y{1}", xcoord, ycoord - sensitivity);
+                            voice.SpeakAsync("Yes master");
+                            port.Write(lastPos);
+                            break;
+
+                        case "Move left":
+                            lastPos = String.Format("X{0}Y{1}", xcoord + sensitivity, ycoord);
+                            voice.SpeakAsync("Yes master");
+                            port.Write(lastPos);
+                            break;
+
+                        case "Move right":
+                            lastPos = String.Format("X{0}Y{1}", xcoord - sensitivity, ycoord);
+                            voice.SpeakAsync("Yes master");
+                            port.Write(lastPos);
+                            break;
+
+                        case "Go loco":
+                            Go_Loco();
+                            break;
+                    }
+                }                
             }
             else
             {
@@ -159,7 +210,7 @@ namespace Laser_Turret_Aim
             lastPos = "X90Y90";
         }
 
-        private async void Off_Mode() //wtf how did i break this??
+        private async void Off_Mode() //wtf how did i break this?? - HOW THE FUCK DID I FIX THIS???
         {            
             retract.PlaySync();
             disabled.PlaySync();
@@ -178,9 +229,32 @@ namespace Laser_Turret_Aim
                 int xcoord = rand.Next(180);
                 int ycoord = rand.Next(180);
                 lastPos = String.Format("X{0}Y{1}", xcoord, ycoord);
-                port.Write(lastPos);                
-                await Task.Delay(85);
-            }           
+                port.Write(lastPos);          
+                
+                if (laserSwitch)
+                {
+                    await Task.Delay(15);
+                    retract.Play();
+                    await Task.Delay(15);
+                    port.Write("OFF");
+
+                    laserSwitch = false;
+                }
+                else
+                {
+                    await Task.Delay(15);
+                    deploy.Play();
+                    await Task.Delay(15);
+                    port.Write("ON");
+
+                    laserSwitch = true;
+                }
+
+                await Task.Delay(55);
+            }
+            await Task.Delay(55);
+            port.Write("ON");
+            laserSwitch = true;
 
         }
 
@@ -240,15 +314,13 @@ namespace Laser_Turret_Aim
 
                 case MouseButtons.Middle:
 
-                    //flash laser mode maybe
+                    Go_Loco();
 
                     break;
             }
         }
 
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
         private async void Form1_MouseMove(object sender, MouseEventArgs e)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
         {
             writeToPort(new Point(e.X, e.Y));
 
@@ -292,7 +364,7 @@ namespace Laser_Turret_Aim
 
         private async void timer1_Tick(object sender, EventArgs e)
         {
-            if (idleVoiceLinesWatch.ElapsedMilliseconds > 10000 && loopdone == true)
+            if (idleVoiceLinesWatch.ElapsedMilliseconds > 15000 && loopdone == true)
             {
                 await idle();
             }
